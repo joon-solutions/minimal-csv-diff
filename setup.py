@@ -3,14 +3,13 @@ from setuptools import setup, find_packages
 setup(
     name='csv_diff',
     version='0.3',
-    packages=find_packages(where='src'),
-    package_dir={'':'src'},
+    packages=find_packages(),
     install_requires=[
         'pandas>=2.0.0',  # Specify the version you need
     ],
     entry_points={
         'console_scripts': [
-            'csv-diff=csv_diff:main',  # Replace with your module and function
+            'csv-diff=src.csv_diff:main',  # Replace with your module and function
         ],
     },
     include_package_data=True,
