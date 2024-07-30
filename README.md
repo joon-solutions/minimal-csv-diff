@@ -9,7 +9,7 @@
 
 # usage
 - put the script and 2 csv files to validate in the same directory
-- `python csv_diff_0.2.py`
+- `python csv_diff_0.3.py`
 - follow the prompt to select the files, and keys to be used
 - the script will generate a new .csv file `diff.csv` with the results, if there are differences.
 
