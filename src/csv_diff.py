@@ -6,12 +6,11 @@ import csv
 def main():
 #%%
  
-    foreign_dir = os.environ.get("CSV_DIFF_INSTALLED","0")
+    workdir = os.getcwd() 
+    diff_workdir = input(f'Workdir is "{workdir}".\nEnter to confirm or input the full path to the directory containing the CSV files to compare: \n> ')
+    if diff_workdir.strip():
+        workdir = diff_workdir
 
-    if foreign_dir == "1":
-        workdir = os.getcwd()
-    elif foreign_dir == "0":
-        workdir = os.path.dirname(__file__)
 
     os.chdir(workdir)
     print(f'current workdir is :{workdir}')
@@ -26,14 +25,22 @@ def main():
         print(f"{idx}: {file}")
 
     try:
-        file1_index = int(input("Enter the index of the first file to compare: "))
-        file2_index = int(input("Enter the index of the second file to compare: "))
-        if file1_index not in range(len(csv_files)) or file2_index not in range(len(csv_files)) or file1_index == file2_index:
+        indices_input = input("Enter the indices of the two files to compare, separated by a comma: \n> ")
+        indices = [int(idx.strip()) for idx in indices_input.split(',')]
+        
+        if len(indices) != 2:
+            raise ValueError("You must provide exactly two indices.")
+
+        file1_index, file2_index = indices
+
+        if (file1_index not in range(len(csv_files)) or
+            file2_index not in range(len(csv_files)) or
+            file1_index == file2_index):
             raise ValueError("Invalid indices or indices are the same.")
+
     except ValueError as e:
         print(f"Invalid input: {e}")
         raise SystemExit
-
     print("\n" + "-" * 50)  # Prints a line of 50 dashes
 
     csv_file1 = csv_files[file1_index]
@@ -172,7 +179,7 @@ def main():
         print("\n" + "-" * 50)  # Prints a line of 50 dashes
 
         # Print output filename
-        print(f"Differences have been written to {output_filename}")
+        print(f"Differences have been written to '{output_filename}'")
 
     else:
         print('No differences found.')
