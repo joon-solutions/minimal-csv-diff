@@ -13,3 +13,4 @@
 - follow the prompt to select the files, and keys to be used
 - the script will generate a new .csv file `diff.csv` with the results, if there are differences.
 
+![image](https://github.com/user-attachments/assets/8929693a-ed2b-489a-862c-631c82d1b89a)
