@@ -14,12 +14,18 @@ pip install --upgrade git+https://github.com/joon-solutions/looker_data_validati
 ```
 
 2. In your terminal:
-- Go to the directory with the CSV files using `cd`
-- Run `csv-diff` and follow the prompts
-  - Enter the indices of the two files to compare, separated by a comma
-    ![image](https://github.com/user-attachments/assets/aa0df05b-1905-422f-9e35-ca661eca6b9c)
-  - Select (in order) a surrogate key / PK to order the results.
-    ![image](https://github.com/user-attachments/assets/18235951-3624-4553-9905-b1071e0b23b9)
+Run `csv-diff` and follow the prompts
+- Enter to confirm or input the full path to the directory containing the CSV files to compare
+  ![image](https://github.com/user-attachments/assets/96574b8a-7e14-4491-8b08-8c7424d8d48c)
+  
+- Input the file delimiter:
+  ![image](https://github.com/user-attachments/assets/1ff7dce5-ef20-4fc4-9232-7f76467da0df)
+  
+- Enter the indices of the two files to compare, separated by a comma
+  ![image](https://github.com/user-attachments/assets/aa0df05b-1905-422f-9e35-ca661eca6b9c)
+  
+- Select (in order) a surrogate key / PK to order the results.
+  ![image](https://github.com/user-attachments/assets/18235951-3624-4553-9905-b1071e0b23b9)
 
 - The script will generate a new `diff.csv` file with the results, if there are differences.
   ![image](https://github.com/user-attachments/assets/e8a7b48d-6992-4399-bb77-69c3220e4202)
