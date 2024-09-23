@@ -2,7 +2,9 @@
 This script compares the values of the 2 CSV files using specified keys and matched column names (note: make sure column names are identical between these files).
 
 # Prerequisites
-2 CSV files with matching column names (proper ordering is not required).
+2 CSV files with 
+- Matching column names (proper ordering is not required)
+- Columns that used as surrogate key / PK
 
 # Getting started
 Getting started involves (in this order):
