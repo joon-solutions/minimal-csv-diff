@@ -7,6 +7,8 @@ This script compares the values of the 2 CSV files using specified keys and matc
 - Columns that used as surrogate key / PK
 
 # Getting started
+You can either watch the [Video guidance](https://drive.google.com/file/d/1_mqSxj4E76NhC-NdkGPhV4pzZShMx_vi/view?usp=sharing) or follow the steps below:
+
 Getting started involves (in this order):
 1. Clone or download a copy of this repository to your development machine:
 ```
