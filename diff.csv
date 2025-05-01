@@ -1,0 +1,7 @@
+"surrogate_key","source","failed_columns","age","id","name","city"
+"22","file2.csv","","22","5","Eve","Austin"
+"25","file1.csv","","25","2","Bob","Los Angeles"
+"26","file2.csv","","26","2","Bob","Los Angeles"
+"28","file1.csv","UNIQUE ROW","28","4","Diana","Houston"
+"35","file1.csv","city","35","3","Charlie","Chicago"
+"35","file2.csv","city","35","3","Charlie","San Francisco"
