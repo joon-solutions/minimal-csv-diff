@@ -1,7 +1,13 @@
 [project]
 name = "looker-data-validation"
 version = "0.1.0"
-description = "Add your description here"
+description = "Script to automate Looker data validation using CSV inputs"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "pandas>=2.0.0",
+]
+
+# 👇 This is what uvx and pipx use to register CLI commands
+[project.scripts]
+csv-diff = "src.csv_diff:main"
