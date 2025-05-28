@@ -1,25 +1,84 @@
-# py script to automate generating data validation results
+# 📊 minimal-csv-diff
 
-- the scripts parses 2 .csv file with a number of common column names, prompts to select key field, then, if there are differences aka failed tests, generate a .csv that compares 2 files row-by-row, column-by-column using the keys. Else you are good to go!
-- this should ideally help us quickly validate data, saving development time.
-- once installed, the script can be invoked either from terminal or imported as a package.
+A minimal tool to compare CSV files and generate diff reports for data validation.
 
-# installation
+## ✨ Features
 
-`pip install --upgrade git+https://github.com/joon-solutions/looker_data_validation.git`
+- 🔍 Compare two CSV files with common column names
+- 🎯 Interactive selection of key fields for comparison
+- 📋 Generate detailed diff reports when differences are found
+- ⚡ Command-line interface for quick data validation
+- 🔎 Identifies unique rows and column-level differences
+- 📁 Exports results to CSV format for further analysis
 
-# usage
+## 🚀 Quick Start
 
-**from terminal**
+### Option 1: Run Instantly (No Installation) ⭐
 
-- cd to the directory with the csv files.
-- run `csv-diff` and follow the prompts
-  - select the index of 2 files to compare
-  - select the columns to be used as surrogate key
-- the script will generate a new .csv file `diff.csv` with the results, if there are differences.
+```bash
+uvx minimal-csv-diff
+```
 
-**from a python script**
+### Option 2: Install & Run
 
-* WIP
+```bash
+pip install minimal-csv-diff
+minimal-csv-diff
+```
 
-![image](https://github.com/user-attachments/assets/8929693a-ed2b-489a-862c-631c82d1b89a)
+## 🎮 Try the Demo
+
+Want to see it in action? Check out the [demo](demo/demo.md) directory:
+
+```bash
+cd demo/
+minimal-csv-diff
+# Follow prompts: select files 0,1 and choose a key column
+# See the magic happen! ✨
+```
+
+The demo includes sample CSV files and shows how the tool identifies:
+- 🔴 **Unique rows** (exist in only one file)
+- 🟡 **Column differences** (same record, different values)
+- ✅ **Matching records** (excluded from output)
+
+## 📖 How It Works
+
+1. **📂 Select directory** containing your CSV files
+2. **⚙️ Choose delimiter** (comma, semicolon, etc.)
+3. **📄 Pick two files** to compare
+4. **🔑 Select key columns** for row matching
+5. **📊 Get diff.csv report** if differences exist
+
+## 📤 Output
+
+When differences are found, generates a `diff.csv` with:
+
+- **🔑 surrogate_key**: Concatenated key fields for row identification
+- **📁 source**: Which file the row comes from
+- **❌ failed_columns**: Which columns differ or "UNIQUE ROW"
+- **📋 All original columns**: Complete data for comparison
+
+## 💡 Use Cases
+
+- **🔄 Data validation** between different data sources
+- **🔧 ETL pipeline testing** - compare before/after transformations
+- **🗄️ Database migration verification** - ensure data integrity
+- **📊 Looker dashboard validation** - compare query results across environments
+- **🧪 A/B testing data analysis** - identify differences in datasets
+
+## 🛠️ Development
+
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+
+```bash
+git clone https://github.com/joon-solutions/looker_data_validation
+cd looker_data_validation
+uv sync
+uv run minimal-csv-diff
+```
+
+## 📋 Requirements
+
+- Python >= 3.10
+- pandas >= 2.0.0

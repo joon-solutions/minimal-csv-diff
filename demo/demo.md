@@ -1,8 +1,13 @@
-## 🚀 Demo: CSV Diff in Action
+## 🚀 Demo: minimal-csv-diff in Action
 
 ```bash
-# make sure you installed the package first
-uv run csv-diff
+# Install the package
+pip install minimal-csv-diff
+```
+
+```bash
+# Or run directly with uvx (no installation needed)
+uvx minimal-csv-diff
 ```
 
 ```
@@ -41,20 +46,58 @@ Enter indices of columns to concatenate (comma-separated): 0
 Differences have been written to 'diff.csv'
 ```
 
-### 📄 `diff.csv` Output
+### 📄 Sample Input Files
 
-```csv
-"surrogate_key","source","failed_columns","age","id","name","city"
-"22","file2.csv","","22","5","Eve","Austin"
-"25","file1.csv","","25","2","Bob","Los Angeles"
-"26","file2.csv","","26","2","Bob","Los Angeles"
-"28","file1.csv","UNIQUE ROW","28","4","Diana","Houston"
-"35","file1.csv","city","35","3","Charlie","Chicago"
-"35","file2.csv","city","35","3","Charlie","San Francisco"
-```
+demo/file1.csv
+| id | name    | age | city        |
+|----|---------|-----|-------------|
+| 1  | Alice   | 30  | New York    |
+| 2  | Bob     | 25  | Los Angeles |
+| 3  | Charlie | 35  | Chicago     |
+| 4  | Diana   | 28  | Houston     |
+
+demo/file2.csv
+| id | name    | age | city          |
+|----|---------|-----|---------------|
+| 1  | Alice   | 30  | New York      |
+| 2  | Bob     | 26  | Los Angeles   |
+| 3  | Charlie | 35  | San Francisco |
+| 5  | Eve     | 22  | Austin        |
+
+
+### 📄 Generated `diff.csv` Output
+
+| surrogate_key | source    | failed_columns | name    | id  | city          | age |
+| ------------- | --------- | -------------- | ------- | --- | ------------- | --- |
+| 2             | file1.csv | age            | Bob     | 2   | Los Angeles   | 25  |
+| 2             | file2.csv | age            | Bob     | 2   | Los Angeles   | 26  |
+| 3             | file1.csv | city           | Charlie | 3   | Chicago       | 35  |
+| 3             | file2.csv | city           | Charlie | 3   | San Francisco | 35  |
+| 4             | file1.csv | UNIQUE ROW     | Diana   | 4   | Houston       | 28  |
+| 5             | file2.csv | UNIQUE ROW     | Eve     | 5   | Austin        | 22  |
+
 
 ### 🔎 Key Highlights
 
-- `Eve` and `Diana` are **unique rows** (exist only in one file).
-- `Charlie`'s `city` value mismatches across files.
-- `Bob`'s `age` differs between file1 and file2.
+- **Eve** (age 22) and **Diana** (age 28) are **unique rows** - exist only in one file
+- **Bob's age** differs: 25 in file1 vs 26 in file2
+- **Charlie's city** differs: Chicago in file1 vs San Francisco in file2
+- **Alice** has no differences (not shown in diff output)
+
+### 💡 Use Cases
+
+- **Data validation** between different data sources
+- **ETL pipeline testing** - compare before/after transformations
+- **Database migration verification** - ensure data integrity
+- **Looker dashboard validation** - compare query results across environments
+- **A/B testing data analysis** - identify differences in datasets
+
+### 🎯 Quick Start
+
+demo directory setup
+```bash
+cd demo/
+minimal-csv-diff
+# Follow prompts: select files 0,1 and key column 0 (age)
+# Review generated diff.csv
+```

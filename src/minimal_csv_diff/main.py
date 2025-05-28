@@ -1,16 +1,13 @@
-#%%
 import os
 import pandas as pd
 import csv
 
 def main():
-#%%
- 
-    workdir = os.getcwd() 
+    """Main entry point for csv-diff command."""
+    workdir = os.getcwd()
     diff_workdir = input(f'Workdir is "{workdir}".\nEnter to confirm or input the full path to the directory containing the CSV files to compare: \n> ')
     if diff_workdir.strip():
         workdir = diff_workdir
-
 
     os.chdir(workdir)
     print(f'current workdir is :{workdir}')
@@ -41,7 +38,8 @@ def main():
     except ValueError as e:
         print(f"Invalid input: {e}")
         raise SystemExit
-    print("\n" + "-" * 50)  # Prints a line of 50 dashes
+    
+    print("\n" + "-" * 50)
 
     csv_file1 = csv_files[file1_index]
     csv_file2 = csv_files[file2_index]
@@ -55,7 +53,7 @@ def main():
     column_pool = []
     for df in df_list:
         column_pool.extend(df.columns)
-    column_pool = list(set(column_pool))  # Remove duplicates
+    column_pool = list(set(column_pool))
 
     # Build the unique pool
     common_pool = column_pool.copy()
@@ -87,20 +85,17 @@ def main():
         # Disable the warning
         pd.options.mode.chained_assignment = None
         print('Found differences between the two files.')
-        
-        print("\n" + "-" * 50)  # Prints a line of 50 dashes
+        print("\n" + "-" * 50)
         
         unique['source'] = unique['_merge'].apply(flag_column)
-        
-        # Clone '_merge' column to a new column
         unique['result'] = unique['_merge']
-        
-        # Reorder columns to place 'source' and 'result' at the start
+
+        # Reorder columns
         columns = ['source', 'result'] + [col for col in unique.columns if col not in ['source', 'result']]
         unique = unique[columns]
 
         print("\nSelect (in order) a surrogate key / PK to order the results.\nAvailable columns for concatenation:")
-        print("\n" + "-" * 50)  # Prints a line of 50 dashes
+        print("\n" + "-" * 50)
 
         # Prompt user to select columns to concatenate
         for idx, col in enumerate(common_pool):
@@ -109,7 +104,6 @@ def main():
         try:
             selected_indices = list(map(int, input("Enter indices of columns to concatenate (comma-separated): ").split(',')))
             selected_columns = [common_pool[i] for i in selected_indices if i in range(len(common_pool))]
-            
             if not selected_columns:
                 raise ValueError("No valid columns selected.")
         except ValueError as e:
@@ -129,40 +123,37 @@ def main():
         # Order DataFrame by the new surrogate_key column
         unique = unique.sort_values(by='surrogate_key').reset_index(drop=True)
 
-        # Debugging: Print column names and a few rows
-        # print(f"Columns in DataFrame: {unique.columns}")
-        # print(unique.head())
-
         # Initialize the fail_column with empty values
         unique['fail_column'] = ''
 
-        # Case 1: Find consecutive rows with the same surrogate_key but different source
-        for i in range(len(unique) - 1):
-            if (unique.loc[i, 'surrogate_key'] == unique.loc[i + 1, 'surrogate_key'] and
-                unique.loc[i, 'source'] != unique.loc[i + 1, 'source']):
-                
-                # Identify columns with different values
-                differing_columns = [col for col in unique.columns[2:] if unique.loc[i, col] != unique.loc[i + 1, col]]
-                
-                # Append differing columns to fail_column
-                unique.loc[i, 'fail_column'] = '| - |'.join(differing_columns)
-                unique.loc[i + 1, 'fail_column'] = '| - |'.join(differing_columns)
+        # Count occurrences of each surrogate_key
+        surrogate_counts = unique['surrogate_key'].value_counts()
 
-        # Case 2: Find consecutive rows with the same source but different surrogate_key
-        for i in range(len(unique) - 1):
-            if (unique.loc[i, 'source'] == unique.loc[i + 1, 'source'] and
-                unique.loc[i, 'surrogate_key'] != unique.loc[i + 1, 'surrogate_key']):
-                
-                unique.loc[i, 'fail_column'] = 'UNIQUE ROW'
-                unique.loc[i + 1, 'fail_column'] = 'UNIQUE ROW'
+        # Case 1: Identify UNIQUE ROWS (surrogate_key appears only once)
+        unique_keys = surrogate_counts[surrogate_counts == 1].index
+        unique.loc[unique['surrogate_key'].isin(unique_keys), 'fail_column'] = 'UNIQUE ROW'
 
-        # Ensure both rows with the same surrogate_key have consistent fail_column values
-        for i in range(len(unique) - 1):
-            if (unique.loc[i, 'surrogate_key'] == unique.loc[i + 1, 'surrogate_key']):
-                if unique.loc[i, 'fail_column'] != 'UNIQUE ROW' and unique.loc[i + 1, 'fail_column'] == 'UNIQUE ROW':
-                    unique.loc[i + 1, 'fail_column'] = unique.loc[i, 'fail_column']
-                elif unique.loc[i, 'fail_column'] == 'UNIQUE ROW' and unique.loc[i + 1, 'fail_column'] != 'UNIQUE ROW':
-                    unique.loc[i, 'fail_column'] = unique.loc[i + 1, 'fail_column']
+        # Case 2: For rows with same surrogate_key but different sources, find differing columns
+        for key in surrogate_counts[surrogate_counts > 1].index:
+            key_rows = unique[unique['surrogate_key'] == key]
+            if len(key_rows) == 2:  # Should be exactly 2 rows with same key
+                row1_idx = key_rows.index[0]
+                row2_idx = key_rows.index[1]
+                
+                # Skip columns that are metadata (surrogate_key, source, fail_column)
+                data_columns = [col for col in unique.columns if col not in ['surrogate_key', 'source', 'fail_column']]
+                
+                # Find columns with different values
+                differing_columns = []
+                for col in data_columns:
+                    if unique.loc[row1_idx, col] != unique.loc[row2_idx, col]:
+                        differing_columns.append(col)
+                
+                # Set the failed columns for both rows
+                if differing_columns:
+                    fail_text = '| - |'.join(differing_columns)
+                    unique.loc[row1_idx, 'fail_column'] = fail_text
+                    unique.loc[row2_idx, 'fail_column'] = fail_text
 
         # Create a new field holding fail_column values and reorder columns
         unique.insert(2, 'failed_columns', unique['fail_column'])
@@ -175,18 +166,10 @@ def main():
 
         # Export the CSV
         unique.to_csv(output_filename, sep=',', index=False, quotechar='"', quoting=csv.QUOTE_ALL)
-
-        print("\n" + "-" * 50)  # Prints a line of 50 dashes
-
-        # Print output filename
+        print("\n" + "-" * 50)
         print(f"Differences have been written to '{output_filename}'")
-
     else:
         print('No differences found.')
-
-#%%
-
-# %%
 
 if __name__ == "__main__":
     main()

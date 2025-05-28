@@ -1,13 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "looker-data-validation"
+name = "minimal-csv-diff"
 version = "0.1.0"
-description = "Script to automate Looker data validation using CSV inputs"
+description = "Minimal tool to compare CSV files and generate diff reports"
 readme = "README.md"
+authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0.0",
 ]
 
-# 👇 This is what uvx and pipx use to register CLI commands
 [project.scripts]
-csv-diff = "src.csv_diff:main"
+minimal-csv-diff = "minimal_csv_diff.main:main"
+
+[project.urls]
+Homepage = "https://github.com/joon-solutions/looker_data_validation"
+Repository = "https://github.com/joon-solutions/looker_data_validation"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
