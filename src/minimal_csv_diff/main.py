@@ -5,6 +5,52 @@ import pandas as pd
 import csv
 
 def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
+    """
+    Compare two CSV files and generate a diff report showing differences.
+    
+    This function performs a comprehensive comparison of two CSV files, identifying
+    rows that exist in one file but not the other, and highlighting specific column
+    differences for rows with matching keys but different values.
+    
+    Args:
+        file1 (str): Path to the first CSV file to compare
+        file2 (str): Path to the second CSV file to compare  
+        delimiter (str): CSV delimiter character (e.g., ',', ';', '\t')
+        key_columns (list): List of column names to use as composite key for matching rows
+        output_file (str, optional): Path for the output diff file. Defaults to 'diff.csv'
+    
+    Returns:
+        None: Writes results to output_file and prints status message
+        
+    Output File Structure:
+        - surrogate_key: Concatenated key columns for row identification
+        - source: Filename indicating which file the row came from
+        - failed_columns: Pipe-separated list of columns that differ between files
+        - [original columns]: All common columns from both input files
+    
+    Behavior:
+        - Only compares columns that exist in both files
+        - Treats empty strings as None for comparison
+        - Converts all data to strings to avoid type comparison issues
+        - Groups differences by surrogate key to show related changes
+        - Marks unique rows (exist in only one file) as 'UNIQUE ROW'
+        - For matching keys with different values, lists the differing columns
+    
+    Example:
+        >>> diff_csv('data1.csv', 'data2.csv', ',', ['id', 'date'], 'output.csv')
+        Differences have been written to 'output.csv'
+        
+    AI Agent Usage:
+        1. Use eda_analyzer to identify optimal key_columns
+        2. Ensure both files exist and are readable
+        3. Call this function with recommended keys
+        4. Parse output file for detailed difference analysis
+        
+    Raises:
+        FileNotFoundError: If input files don't exist
+        pandas.errors.EmptyDataError: If CSV files are empty or malformed
+        KeyError: If specified key_columns don't exist in both files
+    """
     # Load dataframes
     df1 = pd.read_csv(file1, delimiter=delimiter, converters={i: str for i in range(100)}, quoting=csv.QUOTE_MINIMAL)
     df2 = pd.read_csv(file2, delimiter=delimiter, converters={i: str for i in range(100)}, quoting=csv.QUOTE_MINIMAL)
@@ -94,6 +140,31 @@ def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
         print('No differences found.')
 
 def interactive_mode():
+    """
+    Run the CSV diff tool in interactive mode with user prompts.
+    
+    This function provides a guided interface for users to:
+    1. Select working directory
+    2. Choose CSV delimiter
+    3. Pick two files to compare from available CSV files
+    4. Select key columns from common columns
+    5. Specify output filename
+    
+    The function automatically discovers CSV files in the working directory
+    and presents common columns from both selected files for key selection.
+    
+    Returns:
+        None: Calls diff_csv() with user-selected parameters
+        
+    AI Agent Usage:
+        Not recommended for AI agents - use diff_csv() directly instead.
+        This function requires interactive input and is designed for human users.
+        
+    Raises:
+        SystemExit: If invalid input is provided or files cannot be loaded
+        FileNotFoundError: If working directory doesn't exist
+        pandas.errors.EmptyDataError: If selected CSV files are malformed
+    """
     workdir = os.getcwd()
     diff_workdir = input(f'Workdir is "{workdir}".\nEnter to confirm or input the full path to the directory containing the CSV files to compare: \n> ')
     if diff_workdir.strip():
@@ -146,6 +217,40 @@ def interactive_mode():
     diff_csv(csv_file1, csv_file2, delimiter, key_columns, output_file)
 
 def main():
+    """
+    Main entry point for the CSV diff tool supporting both CLI and interactive modes.
+    
+    Command Line Interface:
+        python main.py file1.csv file2.csv --key "col1,col2" [options]
+        
+    Interactive Mode:
+        python main.py (without required arguments)
+    
+    CLI Arguments:
+        file1 (str): First CSV file path
+        file2 (str): Second CSV file path
+        --delimiter (str): CSV delimiter (default: ',')
+        --key (str): Comma-separated key column names (required for CLI mode)
+        --output (str): Output file path (default: 'diff.csv')
+    
+    AI Agent Usage:
+        Recommended approach:
+        1. Run eda_analyzer.py first to get key recommendations
+        2. Use CLI mode with discovered parameters:
+           subprocess.run([
+               'python', 'main.py', 'file1.csv', 'file2.csv',
+               '--key', 'recommended_keys',
+               '--delimiter', 'detected_delimiter',
+               '--output', 'diff_output.csv'
+           ])
+        3. Parse the generated diff file for analysis results
+        
+    Example CLI Usage:
+        python main.py data1.csv data2.csv --key "id,date" --output results.csv
+        
+    Returns:
+        None: Exits with status code 0 on success, 1 on error
+    """
     parser = argparse.ArgumentParser(description="Diff two CSV files.")
     parser.add_argument("file1", nargs='?', help="First CSV file")
     parser.add_argument("file2", nargs='?', help="Second CSV file")
