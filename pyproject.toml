@@ -10,11 +10,15 @@ readme = "README.md"
 authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
+    "chardet>=5.2.0",
     "pandas>=2.0.0",
+    "psutil>=7.0.0",
+    "unidecode>=1.4.0",
 ]
 
 [project.scripts]
 minimal-csv-diff = "minimal_csv_diff.main:main"
+csv-analyze = "minimal_csv_diff.eda_analyzer:main"
 
 [project.urls]
 Homepage = "https://github.com/joon-solutions/looker_data_validation"
