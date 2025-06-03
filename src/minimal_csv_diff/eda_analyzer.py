@@ -1,46 +1,30 @@
 """
 CSV EDA Analyzer - Exploratory Data Analysis for CSV files
 
-This script analyzes CSV files to provide insights for data comparison and key selection.
-Designed to be used by AI agents for automated CSV processing workflows.
+This module provides both programmatic API for LLM agents and CLI interface for humans.
+The programmatic API is designed for automated CSV processing workflows.
 
-Usage:
-    python -m minimal_csv_diff.eda_analyzer file1.csv file2.csv [file3.csv ...]
+Programmatic Usage (LLM Agents):
+    from minimal_csv_diff.eda_analyzer import get_recommended_keys, CSVAnalyzer
     
-    Or as entry point after installation:
-    csv-analyze file1.csv file2.csv [file3.csv ...]
+    # Quick two-file analysis
+    result = get_recommended_keys(['file1.csv', 'file2.csv'])
+    keys = result['recommended_keys']
+    
+    # Detailed single file analysis
+    analyzer = CSVAnalyzer('data.csv')
+    report = analyzer.generate_report()
 
-Arguments:
-    files: One or more CSV file paths to analyze
-
-Options:
-    --delimiter, -d: CSV delimiter (default: ',')
-    --help, -h: Show this help message
-
-Output:
-    - Generates detailed JSON report in temp directory
-    - Prints AI-parseable summary to stdout with:
-        * REPORT_FILE: Path to detailed JSON analysis
-        * RECOMMENDED_KEYS: Suggested key columns for CSV diffing
-        * KEY_CONFIDENCE: Confidence score (0-100)
-        * FILES: List of analyzed files
-        * TARGET_FILE: Recommended target format file
-
-Example AI Agent Workflow:
-    1. Run: csv-analyze data1.csv data2.csv
-    2. Parse stdout for RECOMMENDED_KEYS and REPORT_FILE
-    3. Use recommended keys with csv-diff tool
-    4. Optionally read full JSON report for detailed analysis
-
-Author: Your Name
-License: MIT
+CLI Usage (Humans):
+    python -m minimal_csv_diff.eda_analyzer file1.csv file2.csv
+    csv-analyze file1.csv file2.csv
 """
 
 import pandas as pd
 import numpy as np
 import json
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 import re
 from collections import Counter
 from itertools import combinations
@@ -55,7 +39,7 @@ class CSVAnalyzer:
     """
     Analyzes CSV files to extract structural and statistical information.
     
-    Provides insights for:
+    This class provides detailed analysis of individual CSV files including:
     - Column data types and patterns
     - Potential key columns (single and composite)
     - Data quality metrics
@@ -298,7 +282,6 @@ class CSVAnalyzer:
         df_sample = self.df
         if len(self.df) > max_rows_for_analysis:
             df_sample = self.df.sample(n=max_rows_for_analysis, random_state=42)
-            print(f"Sampling {max_rows_for_analysis} rows for composite key analysis")
         
         # Get candidate columns (exclude columns with >50% nulls)
         candidate_columns = []
@@ -311,14 +294,11 @@ class CSVAnalyzer:
         
         # Test combinations from size 2 to max_columns
         for combo_size in range(2, max_columns + 1):
-            print(f"Testing {combo_size}-column combinations...")
-            
             # Generate all combinations of this size
             combos = list(combinations(candidate_columns, combo_size))
             
             # Limit combinations to prevent memory issues
             if len(combos) > max_combinations_per_size:
-                print(f"Too many combinations ({len(combos)}), sampling {max_combinations_per_size}")
                 combos = combos[:max_combinations_per_size]
             
             best_for_this_size = None
@@ -326,7 +306,6 @@ class CSVAnalyzer:
             for combo_cols in combos:
                 # Check available memory
                 if psutil.virtual_memory().percent > 80:
-                    print("Memory usage high, stopping composite key analysis")
                     break
                 
                 try:
@@ -366,12 +345,10 @@ class CSVAnalyzer:
                     
                     # Early termination if we found excellent uniqueness
                     if uniqueness_pct >= target_uniqueness:
-                        print(f"Found excellent key: {combo_cols} ({uniqueness_pct:.1f}% unique)")
                         composite_candidates.append(candidate)
                         break
                         
                 except Exception as e:
-                    print(f"Error analyzing combination {combo_cols}: {e}")
                     continue
             
             # Add best candidate from this size if no perfect match found
@@ -387,8 +364,6 @@ class CSVAnalyzer:
         
         # Keep top 5 candidates
         self.analysis['composite_key_candidates'] = composite_candidates[:5]
-        
-        print(f"Found {len(composite_candidates)} composite key candidates")
     
     def generate_report(self) -> Dict:
         """
@@ -419,11 +394,192 @@ def analyze_multiple_files(file_paths: List[str], delimiter: str = ',') -> Dict:
     analyses = {}
     
     for file_path in file_paths:
-        print(f"Analyzing {file_path}...")
         analyzer = CSVAnalyzer(file_path, delimiter)
         analyses[file_path] = analyzer.generate_report()
     
     return analyses
+
+def get_recommended_keys(file_paths: List[str], delimiter: str = ',') -> Dict[str, Any]:
+    """
+    Get recommended key columns for CSV comparison without file I/O overhead.
+    
+    Designed specifically for LLM agents and programmatic usage.
+    
+    Args:
+        file_paths (List[str]): List of CSV file paths to analyze
+        delimiter (str): CSV delimiter character (default: ',')
+    
+    Returns:
+        Dict containing:
+            - recommended_keys (List[str]): Best key columns for comparison
+            - key_type (str): 'single', 'composite', or 'manual_required'  
+            - key_confidence (float): Confidence score 0-100
+            - target_file (str): File to use as comparison baseline
+            - analysis_summary (Dict): Key metrics for each file
+            - status (str): 'success' or 'error'
+            - error_message (str): Error details if status is 'error'
+    
+    Example:
+        >>> result = get_recommended_keys(['data1.csv', 'data2.csv'])
+        >>> if result['status'] == 'success':
+        ...     keys = result['recommended_keys']
+        ...     confidence = result['key_confidence']
+        >>> # Use keys with main.py diff_csv function
+    
+    LLM Agent Workflow:
+        1. Call this function with CSV file paths
+        2. Check result['status'] for success/error
+        3. Use result['recommended_keys'] with diff_csv()
+        4. Access result['analysis_summary'] for additional insights
+    """
+    try:
+        # Analyze files
+        analysis_result = analyze_multiple_files(file_paths, delimiter)
+        
+        # Extract recommendations (same logic as main())
+        recommended_keys = []
+        key_confidence = 0
+        key_type = "none"
+        target_file = file_paths[0] if file_paths else None
+        
+        if target_file and target_file in analysis_result:
+            analysis = analysis_result[target_file]
+            
+            # Try composite keys first
+            composite_keys = analysis.get('composite_key_candidates', [])
+            if composite_keys and composite_keys[0]['uniqueness_percentage'] > 90:
+                recommended_keys = composite_keys[0]['columns']
+                key_confidence = composite_keys[0]['uniqueness_percentage']
+                key_type = "composite"
+            else:
+                # Fallback to single column keys
+                single_keys = analysis.get('key_candidates', [])
+                if single_keys and single_keys[0]['unique_percentage'] > 70:
+                    recommended_keys = [single_keys[0]['column']]
+                    key_confidence = single_keys[0]['unique_percentage']
+                    key_type = "single"
+        
+        if not recommended_keys:
+            key_type = "manual_required"
+        
+        # Build summary for LLM agent
+        analysis_summary = {}
+        for file_path, analysis in analysis_result.items():
+            analysis_summary[file_path] = {
+                'rows': analysis['structure']['rows'],
+                'columns': analysis['structure']['columns'],
+                'column_names': analysis['structure']['column_names'],
+                'best_single_key': analysis.get('key_candidates', [{}])[0].get('column') if analysis.get('key_candidates') else None,
+                'best_composite_key': analysis.get('composite_key_candidates', [{}])[0].get('columns') if analysis.get('composite_key_candidates') else None
+            }
+        
+        return {
+            'recommended_keys': recommended_keys,
+            'key_type': key_type,
+            'key_confidence': key_confidence,
+            'target_file': target_file,
+            'analysis_summary': analysis_summary,
+            'files': file_paths,
+            'status': 'success',
+            'error_message': None
+        }
+        
+    except Exception as e:
+        return {
+            'recommended_keys': [],
+            'key_type': 'error',
+            'key_confidence': 0,
+            'target_file': None,
+            'analysis_summary': {},
+            'files': file_paths,
+            'status': 'error',
+            'error_message': str(e)
+        }
+
+def quick_key_analysis(file1: str, file2: str, delimiter: str = ',') -> Dict[str, Any]:
+    """
+    Fast key recommendation for two-file comparison (most common LLM agent use case).
+    
+    Optimized version of get_recommended_keys() for the common scenario of
+    comparing exactly two CSV files.
+    
+    Args:
+        file1 (str): First CSV file path
+        file2 (str): Second CSV file path  
+        delimiter (str): CSV delimiter character (default: ',')
+    
+    Returns:
+        Dict with same structure as get_recommended_keys() but optimized for two files
+    
+    LLM Agent Usage:
+        >>> keys_info = quick_key_analysis('old_data.csv', 'new_data.csv')
+        >>> if keys_info['status'] == 'success':
+        ...     from minimal_csv_diff.main import diff_csv
+        ...     diff_csv(file1, file2, delimiter, keys_info['recommended_keys'])
+    """
+    return get_recommended_keys([file1, file2], delimiter)
+
+def get_column_intersection(file_paths: List[str], delimiter: str = ',') -> Dict[str, Any]:
+    """
+    Get common columns across multiple CSV files for key selection.
+    
+    Useful for LLM agents to understand what columns are available for comparison
+    before running full analysis.
+    
+    Args:
+        file_paths (List[str]): List of CSV file paths
+        delimiter (str): CSV delimiter character (default: ',')
+    
+    Returns:
+        Dict containing:
+            - common_columns (List[str]): Columns present in all files
+            - all_columns (List[str]): All unique columns across files
+            - file_columns (Dict): Columns for each file
+            - status (str): 'success' or 'error'
+            - error_message (str): Error details if status is 'error'
+    
+    LLM Agent Usage:
+        >>> cols = get_column_intersection(['file1.csv', 'file2.csv'])
+        >>> if cols['status'] == 'success':
+        ...     available_keys = cols['common_columns']
+    """
+    try:
+        file_columns = {}
+        all_columns = set()
+        
+        for file_path in file_paths:
+            df = pd.read_csv(file_path, delimiter=delimiter, nrows=0)  # Just get headers
+            columns = list(df.columns)
+            file_columns[file_path] = columns
+            all_columns.update(columns)
+        
+        # Find intersection
+        if file_columns:
+            common_columns = set(list(file_columns.values())[0])
+            for columns in file_columns.values():
+                common_columns = common_columns.intersection(set(columns))
+            common_columns = list(common_columns)
+        else:
+            common_columns = []
+        
+        return {
+            'common_columns': common_columns,
+            'all_columns': list(all_columns),
+            'file_columns': file_columns,
+            'status': 'success',
+            'error_message': None
+        }
+        
+    except Exception as e:
+        return {
+            'common_columns': [],
+            'all_columns': [],
+            'file_columns': {},
+            'status': 'error',
+            'error_message': str(e)
+        }
+
+# CLI INTERFACE FOR HUMANS
 
 def parse_arguments():
     """
@@ -441,10 +597,10 @@ Examples:
   csv-analyze --delimiter ';' file1.csv file2.csv file3.csv
   python -m minimal_csv_diff.eda_analyzer data/*.csv
 
-AI Agent Usage:
-  1. Run analyzer on CSV files
-  2. Parse stdout for RECOMMENDED_KEYS and REPORT_FILE
-  3. Use recommended keys with csv-diff tool
+LLM Agent Usage:
+  1. Import functions: from minimal_csv_diff.eda_analyzer import get_recommended_keys
+  2. Get recommendations: result = get_recommended_keys(['file1.csv', 'file2.csv'])
+  3. Use with diff tool: diff_csv(file1, file2, delimiter, result['recommended_keys'])
         """
     )
     
@@ -464,10 +620,13 @@ AI Agent Usage:
 
 def main():
     """
-    Main entry point for the EDA analyzer.
+    Main entry point for the EDA analyzer CLI.
+    
+    This function is designed for human users. LLM agents should use the
+    programmatic functions like get_recommended_keys() instead.
     
     Processes command line arguments, analyzes files, and outputs results
-    in both human-readable and AI-parseable formats.
+    in both human-readable and LLM-parseable formats.
     """
     try:
         args = parse_arguments()
@@ -487,13 +646,13 @@ def main():
         report_filename = f"eda_report_{session_id}.json"
         report_path = os.path.join(temp_dir, report_filename)
         
-        # Save AI-readable report to temp directory
+        # Save LLM-readable report to temp directory
         with open(report_path, 'w') as f:
             json.dump(analysis_result, f, indent=2, default=str)
         
         print(f"EDA report generated: {report_path}")
         
-        # AI-PARSEABLE OUTPUT
+        # LLM-PARSEABLE OUTPUT
         print("\n=== AI_AGENT_SUMMARY ===")
         print(f"REPORT_FILE: {report_path}")
         print(f"SESSION_ID: {session_id}")
