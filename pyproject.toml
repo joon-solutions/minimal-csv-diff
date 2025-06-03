@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "minimal-csv-diff"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minimal tool to compare CSV files and generate diff reports"
 readme = "README.md"
 authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
