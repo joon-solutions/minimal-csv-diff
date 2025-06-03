@@ -1,3 +1,5 @@
+[![CI](https://github.com/joon-solutions/minimal-csv-diff/actions/workflows/CI.yml/badge.svg)](https://github.com/joon-solutions/minimal-csv-diff/actions/workflows/CI.yml)
+
 # 📊 minimal-csv-diff
 
 A minimal tool to compare CSV files and generate diff reports for data validation.

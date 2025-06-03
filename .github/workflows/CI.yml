@@ -1,0 +1,29 @@
+name: test with mock data
+
+on: 
+  push: 
+  pull_request:
+  workflow_dispatch: 
+
+jobs:
+  run_pytest:
+    name: run pytest with mock data
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+
+      - name: Run pytest
+        run: uv run pytest
