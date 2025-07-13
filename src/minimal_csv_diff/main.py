@@ -7,6 +7,24 @@ import tempfile
 import uuid
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import re
+
+def normalize_string(s: Any) -> str:
+    """
+    Normalizes a string by stripping whitespace, standardizing internal spaces,
+    and handling None values.
+    """
+    if s is None:
+        return ""
+    s = str(s)
+    # Split by lines, strip each line, then join back with original newlines
+    lines = s.splitlines()
+    normalized_lines = []
+    for line in lines:
+        # Replace multiple spaces/tabs with a single space within each line
+        normalized_line = re.sub(r'[ \t]+', ' ', line.strip())
+        normalized_lines.append(normalized_line)
+    return '\n'.join(normalized_lines)
 
 def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
     """
@@ -57,10 +75,20 @@ def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
         KeyError: If specified key_columns don't exist in both files
     """
     # Load dataframes
+    # Load dataframes
     df1 = pd.read_csv(file1, delimiter=delimiter, converters={i: str for i in range(100)}, quoting=csv.QUOTE_MINIMAL)
     df2 = pd.read_csv(file2, delimiter=delimiter, converters={i: str for i in range(100)}, quoting=csv.QUOTE_MINIMAL)
     df1.replace('', None, inplace=True)
     df2.replace('', None, inplace=True)
+
+    # Normalize key columns before merging to ensure proper matching
+    df1_normalized_keys = df1.copy()
+    df2_normalized_keys = df2.copy()
+    for col in key_columns:
+        if col in df1_normalized_keys.columns:
+            df1_normalized_keys[col] = df1_normalized_keys[col].apply(normalize_string)
+        if col in df2_normalized_keys.columns:
+            df2_normalized_keys[col] = df2_normalized_keys[col].apply(normalize_string)
 
     # Build the column pool
     column_pool = list(set(df1.columns).union(df2.columns))
@@ -68,92 +96,85 @@ def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
     # Build the common pool (columns present in both)
     common_pool = [col for col in column_pool if col in df1.columns and col in df2.columns]
 
-    # Only keep columns in common_pool
-    df1_common = df1[common_pool]
-    df2_common = df2[common_pool]
+    # Only keep columns in common_pool for comparison
+    df1_common = df1_normalized_keys[common_pool]
+    df2_common = df2_normalized_keys[common_pool]
 
-    # Merge the two DataFrames
-    merged_df = pd.merge(df1_common, df2_common, indicator=True, how='outer')
+    # Merge the two DataFrames using normalized keys
+    merged_df = pd.merge(df1_common, df2_common, on=key_columns, how='outer', suffixes=('_file1', '_file2'), indicator=True)
 
-    # Select rows present in df1 but not in df2, and vice versa
-    unique = merged_df[(merged_df['_merge'] == 'left_only') | (merged_df['_merge'] == 'right_only')]
+    # Prepare the output DataFrame
+    output_df_rows = []
 
-    def flag_column(value):
-        if value == 'left_only':
-            return os.path.basename(file1)
-        elif value == 'right_only':
-            return os.path.basename(file2)
-        else:
-            return 'both?'
+    # Identify unique rows (left_only or right_only after merge)
+    left_only = merged_df[merged_df['_merge'] == 'left_only'].copy()
+    right_only = merged_df[merged_df['_merge'] == 'right_only'].copy()
 
-    if unique.shape[0] > 0:
-        pd.options.mode.chained_assignment = None
-        unique['source'] = unique['_merge'].apply(flag_column)
-        unique['result'] = unique['_merge']
-
-        # Reorder columns
-        columns = ['source', 'result'] + [col for col in unique.columns if col not in ['source', 'result']]
-        unique = unique[columns]
-
-        # Create new surrogate_key column
-        unique['surrogate_key'] = unique[key_columns].fillna('').astype(str).agg(''.join, axis=1)
-
-        # Move the new column to the first position
-        columns = ['surrogate_key'] + [col for col in unique.columns if col != 'surrogate_key']
-        unique = unique[columns]
-
-        # Drop 'result' and '_merge' columns
-        unique.drop(columns=['result', '_merge'], inplace=True)
-
-        # Order DataFrame by the new surrogate_key column
-        unique = unique.sort_values(by='surrogate_key').reset_index(drop=True)
-
-        # Initialize the fail_column with empty values
-        unique['fail_column'] = ''
-
-        # Count occurrences of each surrogate_key
-        surrogate_counts = unique['surrogate_key'].value_counts()
-
-        # Case 1: Identify UNIQUE ROWS (surrogate_key appears only once)
-        unique_keys = surrogate_counts[surrogate_counts == 1].index
-        unique.loc[unique['surrogate_key'].isin(unique_keys), 'fail_column'] = 'UNIQUE ROW'
-
-        # Case 2: For rows with same surrogate_key but different sources, find differing columns
-        for key in surrogate_counts[surrogate_counts > 1].index:
-            key_rows = unique[unique['surrogate_key'] == key]
-            if len(key_rows) == 2:
-                row1_idx = key_rows.index[0]
-                row2_idx = key_rows.index[1]
-                data_columns = [col for col in unique.columns if col not in ['surrogate_key', 'source', 'fail_column']]
-                differing_columns = []
-                for col in data_columns:
-                    if unique.loc[row1_idx, col] != unique.loc[row2_idx, col]:
-                        differing_columns.append(col)
-                if differing_columns:
-                    fail_text = '| - |'.join(differing_columns)
-                    unique.loc[row1_idx, 'fail_column'] = fail_text
-                    unique.loc[row2_idx, 'fail_column'] = fail_text
-
-        # Create a new field holding fail_column values and reorder columns
-        unique.insert(2, 'failed_columns', unique['fail_column'])
-        unique.drop(columns=['fail_column'], inplace=True)
-
-        # Export the CSV
-        unique.to_csv(output_file, sep=',', index=False, quotechar='"', quoting=csv.QUOTE_ALL)
-        
-        # Generate summary statistics
-        summary = {
-            'total_differences': len(unique),
-            'unique_rows': len(unique[unique['failed_columns'] == 'UNIQUE ROW']),
-            'modified_rows': len(unique[unique['failed_columns'] != 'UNIQUE ROW']),
-            'files_compared': [os.path.basename(file1), os.path.basename(file2)],
-            'common_columns': len(common_pool),
-            'key_columns_used': key_columns
+    def process_unique_row(row, source_file_name, df_source_suffix):
+        # Use a delimiter for surrogate key to prevent collisions
+        surrogate_key = '|'.join([normalize_string(row[col]) for col in key_columns])
+        row_data = {
+            'surrogate_key': surrogate_key,
+            'source': source_file_name,
+            'failed_columns': 'UNIQUE ROW',
         }
+        for col in common_pool:
+            if col in key_columns:
+                row_data[col] = row[col]
+            else:
+                # Access the suffixed column for non-key columns
+                row_data[col] = row[f'{col}{df_source_suffix}']
+        return row_data
+
+    for _, row in left_only.iterrows():
+        output_df_rows.append(process_unique_row(row, os.path.basename(file1), '_file1'))
+    for _, row in right_only.iterrows():
+        output_df_rows.append(process_unique_row(row, os.path.basename(file2), '_file2'))
+
+    # Identify differing rows (both after merge)
+    both_df = merged_df[merged_df['_merge'] == 'both'].copy()
+
+    for _, row in both_df.iterrows():
+        differing_columns = []
+        for col in common_pool:
+            if col not in key_columns: # Only compare non-key columns
+                val1 = normalize_string(row[f'{col}_file1'])
+                val2 = normalize_string(row[f'{col}_file2'])
+                if val1 != val2:
+                    differing_columns.append(col)
         
-        print(f"Differences have been written to '{output_file}'")
-        return True, output_file, summary
-    else:
+        if differing_columns:
+            # Use a delimiter for surrogate key to prevent collisions
+            surrogate_key = '|'.join([normalize_string(row[col]) for col in key_columns])
+            failed_cols_str = '| - |'.join(differing_columns)
+
+            # Create a row for file1's version
+            row_data_file1 = {
+                'surrogate_key': surrogate_key,
+                'source': os.path.basename(file1),
+                'failed_columns': failed_cols_str,
+            }
+            for col in common_pool:
+                if col in key_columns:
+                    row_data_file1[col] = row[col]
+                else:
+                    row_data_file1[col] = row[f'{col}_file1']
+            output_df_rows.append(row_data_file1)
+
+            # Create a row for file2's version
+            row_data_file2 = {
+                'surrogate_key': surrogate_key,
+                'source': os.path.basename(file2),
+                'failed_columns': failed_cols_str,
+            }
+            for col in common_pool:
+                if col in key_columns:
+                    row_data_file2[col] = row[col]
+                else:
+                    row_data_file2[col] = row[f'{col}_file2']
+            output_df_rows.append(row_data_file2)
+
+    if not output_df_rows:
         print('No differences found.')
         summary = {
             'total_differences': 0,
@@ -164,6 +185,32 @@ def diff_csv(file1, file2, delimiter, key_columns, output_file='diff.csv'):
             'key_columns_used': key_columns
         }
         return False, None, summary
+
+    # Create the final output DataFrame
+    output_df = pd.DataFrame(output_df_rows)
+
+    # Reorder columns for the final output
+    final_columns = ['surrogate_key', 'source', 'failed_columns'] + [col for col in common_pool if col not in key_columns] + key_columns
+    output_df = output_df[final_columns]
+    
+    # Sort by surrogate_key for consistent output
+    output_df = output_df.sort_values(by='surrogate_key').reset_index(drop=True)
+
+    # Export the CSV
+    output_df.to_csv(output_file, sep=',', index=False, quotechar='"', quoting=csv.QUOTE_ALL)
+    
+    # Generate summary statistics
+    summary = {
+        'total_differences': len(output_df),
+        'unique_rows': len(output_df[output_df['failed_columns'] == 'UNIQUE ROW']),
+        'modified_rows': len(output_df[output_df['failed_columns'] != 'UNIQUE ROW']),
+        'files_compared': [os.path.basename(file1), os.path.basename(file2)],
+        'common_columns': len(common_pool),
+        'key_columns_used': key_columns
+    }
+    
+    print(f"Differences have been written to '{output_file}'")
+    return True, output_file, summary
 
 def compare_csv_files(file1: str, file2: str, key_columns: List[str], 
                      delimiter: str = ',', output_file: Optional[str] = None) -> Dict[str, Any]:
