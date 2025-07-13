@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "minimal-csv-diff"
-version = "0.2.0"
+version = "0.3.0"
 description = "Minimal tool to compare CSV files and generate diff reports"
 readme = "README.md"
 authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
@@ -22,11 +22,17 @@ minimal-csv-diff = "minimal_csv_diff.main:main"
 csv-analyze = "minimal_csv_diff.eda_analyzer:main"
 
 [project.urls]
-Homepage = "https://github.com/joon-solutions/looker_data_validation"
-Repository = "https://github.com/joon-solutions/looker_data_validation"
+Homepage = "https://github.com/joon-solutions/minimal-csv-diff"
+Repository = "https://github.com/joon-solutions/minimal-csv-diff"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.semantic_release]
+version_toml = "pyproject.toml:project.version"
+branch = "main"                                
+changelog_file = "CHANGELOG.md"                
+build_command = "uv build"

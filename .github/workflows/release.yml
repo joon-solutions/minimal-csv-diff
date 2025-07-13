@@ -1,0 +1,54 @@
+# .github/workflows/release.yml
+
+name: Create Release and Publish
+
+on:
+  push:
+    branches:
+      - main  # Trigger this workflow on every push to the main branch
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # To push commits and tags
+      issues: write        # To comment on issues
+      pull-requests: write # To comment on pull requests
+      id-token: write      # To authenticate with PyPI for publishing
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # We need to fetch all history and tags for semantic-release to work correctly
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-semantic-release
+
+      - name: Create Release
+        # This command will:
+        # 1. Determine the new version from commit messages.
+        # 2. Update pyproject.toml with the new version.
+        # 3. Create CHANGELOG.md.
+        # 4. Commit the version bump and changelog.
+        # 5. Create a new git tag.
+        # 6. Create a GitHub Release with the changelog.
+        run: semantic-release publish
+        env:
+          # This token is required for semantic-release to create a GitHub Release
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish package to PyPI
+        # This step runs after the release is created.
+        # It uses the same secure, passwordless method as before.
+        if: success()
+        uses: pypa/gh-action-pypi-publish@release/v1
