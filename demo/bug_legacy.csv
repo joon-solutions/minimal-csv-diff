@@ -1,0 +1,26 @@
+id,dimension_name,sql_definition,description,type,group_label,view_name
+1,Order Value,"{% assign x = 10 %}
+SELECT
+  SUM(order_items.price * order_items.quantity)
+FROM
+  {{ order_items }}
+WHERE
+  order_items.status = 'completed'
+  AND order_items.created_at >= DATE('2023-01-01')
+  AND order_items.region = 'EMEA' -- Added region filter
+",Calculates the total value of completed orders.,measure,Sales Metrics,orders
+2,Customer Lifetime Value,"SELECT
+  SUM(payments.amount)
+FROM
+  {{ payments }}
+WHERE
+  payments.customer_id = {{ _user_attributes['customer_id'] }}
+",Estimates the total revenue a customer will generate over their lifetime.,measure,Customer Insights,customers
+3,Product Margin,"SELECT
+  (product.price - product.cost) / product.price
+FROM
+  {{ product }}
+WHERE
+  product.category = 'Electronics'
+  AND product.is_active = TRUE -- Added active filter
+",Calculates the profit margin for electronic products.,measure,Product Performance,products
