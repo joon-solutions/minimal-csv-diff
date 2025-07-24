@@ -25,18 +25,8 @@ def load_and_normalize_dfs(file1: str, file2: str, delimiter: str, key_columns: 
     replaces empty strings with nulls, filters all-null rows,
     and normalizes key columns.
     """
-    # Read headers to get all column names and force them to Utf8
-    df1_headers = pl.read_csv(file1, separator=delimiter, n_rows=0).columns
-    df2_headers = pl.read_csv(file2, separator=delimiter, n_rows=0).columns
-    
-    # all_columns = list(set(df1_headers).union(df2_headers))
-    all_columns = df1_headers
-    
-    # Create a schema dictionary to force all columns to Utf8
-    schema = {col: pl.Utf8 for col in all_columns}
-
-    df1 = pl.read_csv(file1, separator=delimiter, schema=schema)
-    df2 = pl.read_csv(file2, separator=delimiter, schema=schema)
+    df1 = pl.read_csv(file1, separator=delimiter, infer_schema=False)
+    df2 = pl.read_csv(file2, separator=delimiter, infer_schema=False)
 
     # Replace empty strings with None (null) after ensuring all are Utf8
     df1 = df1.with_columns([
