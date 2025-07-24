@@ -12,6 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "chardet>=5.2.0",
     "pandas>=2.0.0",
+    "polars>=1.31.0",
     "psutil>=7.0.0",
     "pytest>=8.3.5",
     "unidecode>=1.4.0",
