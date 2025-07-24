@@ -56,9 +56,9 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
     
     non_key_cols = [col for col in common_pool if col not in key_columns]
     non_key_cols.sort()
-    print(f"DEBUG: key_columns: {key_columns}")
-    print(f"DEBUG: common_pool: {common_pool}")
-    print(f"DEBUG: non_key_cols: {non_key_cols}")
+    # print(f"DEBUG: key_columns: {key_columns}")
+    # print(f"DEBUG: common_pool: {common_pool}")
+    # print(f"DEBUG: non_key_cols: {non_key_cols}")
 
     # Define the final column order for consistency across all output DataFrames
     final_columns = ['surrogate_key', 'source', 'failed_columns'] + key_columns + [col for col in common_pool if col not in key_columns]
@@ -103,7 +103,7 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
         if not both_df_diff.is_empty():
             surrogate_key_expr = pl.concat_str([pl.col(col).map_elements(normalize_string, return_dtype=pl.Utf8) for col in key_columns], separator='|')
 
-            # Construct file1_diff_rows ensuring correct columns and order
+            # Construct file1_diff_rows and file2_diff_rows as before
             file1_diff_rows = both_df_diff.with_columns([
                 surrogate_key_expr.alias('surrogate_key'),
                 pl.lit(file1_name).alias('source'),
@@ -111,10 +111,8 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
                 ['surrogate_key', 'source', 'failed_columns'] +
                 [pl.col(col) for col in key_columns] +
                 [pl.col(col) for col in non_key_cols]
-            ).select(final_columns) # Final selection to enforce order and fill missing
+            ).select(final_columns)
 
-
-            # Construct file2_diff_rows ensuring correct columns and order
             file2_diff_rows = both_df_diff.with_columns([
                 surrogate_key_expr.alias('surrogate_key'),
                 pl.lit(file2_name).alias('source'),
@@ -122,10 +120,36 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
                 ['surrogate_key', 'source', 'failed_columns'] +
                 [pl.col(col) for col in key_columns] +
                 [pl.col(f'{col}_file2').alias(col) for col in non_key_cols]
-            ).select(final_columns) # Final selection to enforce order and fill missing
+            ).select(final_columns)
+
+            # Combine modified rows from both files for deduplication
+            combined_modified_rows = pl.concat([file1_diff_rows, file2_diff_rows])
+
+            # Define columns that represent the 'content' of a modified row (excluding 'source')
+            content_cols_for_dedup = [col for col in final_columns if col != 'source']
+
+            # Identify rows that are identical in content but appear from different sources.
+            # These are the "false positives" to be dropped.
+            # Group by content, then filter out groups where the content appears in more than one source.
+            
+            # Get counts of each unique content combination
+            content_counts = combined_modified_rows.group_by(content_cols_for_dedup).agg(
+                pl.col('source').n_unique().alias('num_unique_sources')
+            )
+
+            # Filter for content that appears in only one source (i.e., not a false positive)
+            truly_different_content = content_counts.filter(pl.col('num_unique_sources') == 1)
+
+            # Now, semi-join the original combined_modified_rows back to truly_different_content
+            # to get only the rows that are not false positives.
+            deduplicated_modified_rows = combined_modified_rows.join(
+                truly_different_content.select(content_cols_for_dedup),
+                on=content_cols_for_dedup,
+                how='semi'
+            )
 
             # Step 3: Combine and finalize the results
-            output_df = pl.concat([output_df_left_only, output_df_right_only, file1_diff_rows, file2_diff_rows])
+            output_df = pl.concat([output_df_left_only, output_df_right_only, deduplicated_modified_rows])
         else:
             output_df = pl.concat([output_df_left_only, output_df_right_only])
     else:
