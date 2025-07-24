@@ -31,6 +31,9 @@ def process_unique_row_polars(df_unique: pl.DataFrame, source_file_name: str, ke
         pl.lit(['UNIQUE ROW']).alias('failed_columns'),
     ])
 
+    # Filter out rows where the surrogate key is empty, as these are likely malformed or unidentifiable unique rows
+    processed_df = processed_df.filter(pl.col('surrogate_key') != "")
+
     # Ensure all final_columns are present, filling with nulls if not
     # and select them in the correct order
     select_expressions = []
