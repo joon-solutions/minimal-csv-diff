@@ -59,12 +59,9 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
     
     non_key_cols = [col for col in common_pool if col not in key_columns]
     non_key_cols.sort()
-    # print(f"DEBUG: key_columns: {key_columns}")
-    # print(f"DEBUG: common_pool: {common_pool}")
-    # print(f"DEBUG: non_key_cols: {non_key_cols}")
 
     # Define the final column order for consistency across all output DataFrames
-    final_columns = ['surrogate_key', 'source', 'failed_columns'] + key_columns + [col for col in common_pool if col not in key_columns]
+    final_columns = ['source', 'failed_columns', 'surrogate_key'] + key_columns + [col for col in common_pool if col not in key_columns]
 
     # Step 1: Isolate unique rows using anti-joins
     # Rows unique to file1
