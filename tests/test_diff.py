@@ -1,16 +1,16 @@
 import os
-import pandas as pd
+import polars as pl
 import tempfile
 import pytest
 from unittest.mock import patch
-from src.minimal_csv_diff.main import (
-    diff_csv, 
-    compare_csv_files, 
-    quick_csv_diff, 
+from src.minimal_csv_diff.api import (
+    compare_csv_files,
+    quick_csv_diff,
     simple_csv_compare,
     get_file_columns,
     validate_key_columns
 )
+from src.minimal_csv_diff.diff_engine import diff_csv_core
 
 def test_diff_csv_produces_expected_output():
     # Paths to demo files
@@ -21,16 +21,19 @@ def test_diff_csv_produces_expected_output():
     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
         output_file = tmp.name
 
-    # Run the diff
-    differences_found, result_file, summary = diff_csv(
-        file1, file2, delimiter=',', key_columns=['id', 'dimension_name', 'view_name'], output_file=output_file
+    # Run the diff using the new API
+    result = compare_csv_files(
+        file1, file2, key_columns=['id', 'dimension_name', 'view_name'], delimiter=',', output_file=output_file
     )
+    differences_found = result['differences_found']
+    result_file = result['output_file']
+    summary = result['summary']
 
     assert differences_found, "Expected differences to be found"
     assert result_file is not None, "Output file path should not be None"
     assert os.path.exists(result_file), f"Output file {result_file} was not created"
 
-    diff_df = pd.read_csv(result_file)
+    diff_df = pl.read_csv(result_file)
 
     # Expected:
     # id=1: sql_definition changed (region filter removed) -> 2 entries
@@ -43,12 +46,12 @@ def test_diff_csv_produces_expected_output():
     assert summary['modified_rows'] == 4, f"Expected 4 modified rows in summary, got {summary['modified_rows']}"
 
     # Check that all 4 rows have 'sql_definition' in their 'failed_columns'
-    for index, row in diff_df.iterrows():
-        assert 'sql_definition' in row['failed_columns'], f"Row {index} did not show 'sql_definition' as a failed column: {row['failed_columns']}"
-        assert row['failed_columns'] != 'UNIQUE ROW', f"Row {index} was incorrectly marked as 'UNIQUE ROW'"
+    for row in diff_df.iter_rows(named=True):
+        assert 'sql_definition' in row['failed_columns'], f"Row did not show 'sql_definition' as a failed column: {row['failed_columns']}"
+        assert row['failed_columns'] != 'UNIQUE ROW', f"Row was incorrectly marked as 'UNIQUE ROW'"
 
     # Verify the sources for the modified rows
-    modified_rows_sources = diff_df['source'].tolist()
+    modified_rows_sources = diff_df['source'].to_list()
     expected_sources = [os.path.basename(file1), os.path.basename(file2),
                         os.path.basename(file1), os.path.basename(file2)]
     assert sorted(modified_rows_sources) == sorted(expected_sources), "Incorrect sources for modified rows"
@@ -64,9 +67,9 @@ def test_compare_csv_files():
     
     files = []
     for data in [data1, data2]:
-        df = pd.DataFrame(data)
+        df = pl.DataFrame(data)
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            df.to_csv(f.name, index=False)
+            df.write_csv(f.name, include_header=True)
             files.append(f.name)
     
     try:
@@ -93,9 +96,9 @@ def test_quick_csv_diff():
     
     files = []
     for data in [data1, data2]:
-        df = pd.DataFrame(data)
+        df = pl.DataFrame(data)
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            df.to_csv(f.name, index=False)
+            df.write_csv(f.name, include_header=True)
             files.append(f.name)
     
     try:
@@ -129,9 +132,9 @@ def test_simple_csv_compare():
     
     files = []
     for data in [data1, data2]:
-        df = pd.DataFrame(data)
+        df = pl.DataFrame(data)
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            df.to_csv(f.name, index=False)
+            df.write_csv(f.name, include_header=True)
             files.append(f.name)
     
     try:
@@ -144,10 +147,10 @@ def test_simple_csv_compare():
 def test_get_file_columns():
     """Test column extraction utility."""
     data = {'col1': [1, 2], 'col2': ['A', 'B']}
-    df = pd.DataFrame(data)
+    df = pl.DataFrame(data)
     
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-        df.to_csv(f.name, index=False)
+        df.write_csv(f.name, include_header=True)
         
         try:
             columns = get_file_columns(f.name)
@@ -158,12 +161,12 @@ def test_get_file_columns():
 def test_validate_key_columns():
     """Test key validation utility."""
     data = {'id': [1, 2], 'name': ['A', 'B']}
-    df = pd.DataFrame(data)
+    df = pl.DataFrame(data)
     
     files = []
     for _ in range(2):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            df.to_csv(f.name, index=False)
+            df.write_csv(f.name, include_header=True)
             files.append(f.name)
     
     try:
@@ -190,15 +193,18 @@ def test_complex_sql_diff_and_unique_rows():
     output_file = "test_complex_diff_output.csv"
     key_columns = ["id", "dimension_name", "view_name"]
 
-    differences_found, result_file, summary = diff_csv(
-        file1_path, file2_path, ',', key_columns, output_file
+    result = compare_csv_files(
+        file1_path, file2_path, key_columns=key_columns, delimiter=',', output_file=output_file
     )
+    differences_found = result['differences_found']
+    result_file = result['output_file']
+    summary = result['summary']
 
     assert differences_found, "Expected differences to be found"
     assert result_file is not None, "Output file path should not be None"
     assert os.path.exists(result_file), f"Output file {result_file} was not created"
 
-    diff_df = pd.read_csv(result_file)
+    diff_df = pl.read_csv(result_file)
 
     # Expected:
     # id=1: sql_definition changed (region filter removed) -> 2 entries
@@ -211,12 +217,12 @@ def test_complex_sql_diff_and_unique_rows():
     assert summary['modified_rows'] == 4, f"Expected 4 modified rows in summary, got {summary['modified_rows']}"
 
     # Check that all 4 rows have 'sql_definition' in their 'failed_columns'
-    for index, row in diff_df.iterrows():
-        assert 'sql_definition' in row['failed_columns'], f"Row {index} did not show 'sql_definition' as a failed column: {row['failed_columns']}"
-        assert row['failed_columns'] != 'UNIQUE ROW', f"Row {index} was incorrectly marked as 'UNIQUE ROW'"
+    for row in diff_df.iter_rows(named=True):
+        assert 'sql_definition' in row['failed_columns'], f"Row did not show 'sql_definition' as a failed column: {row['failed_columns']}"
+        assert row['failed_columns'] != 'UNIQUE ROW', f"Row was incorrectly marked as 'UNIQUE ROW'"
 
     # Verify the sources for the modified rows
-    modified_rows_sources = diff_df['source'].tolist()
+    modified_rows_sources = diff_df['source'].to_list()
     expected_sources = [os.path.basename(file1_path), os.path.basename(file2_path),
                         os.path.basename(file1_path), os.path.basename(file2_path)]
     assert sorted(modified_rows_sources) == sorted(expected_sources), "Incorrect sources for modified rows"
