@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "minimal-csv-diff"
-version = "0.3.0"
+version = "0.4.1"
 description = "Minimal tool to compare CSV files and generate diff reports"
 readme = "README.md"
 authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-minimal-csv-diff = "minimal_csv_diff.main:main"
+minimal-csv-diff = "minimal_csv_diff.main:main_cli"
 csv-analyze = "minimal_csv_diff.eda_analyzer:main"
 
 [project.urls]
