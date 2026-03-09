@@ -231,7 +231,7 @@ sequenceDiagram
 
 # 2. Commit the version bump
 git add pyproject.toml
-git commit -m "chore: release v0.5.0"
+git commit -m "bump version"   # <-- Message can be anything
 
 # 3. Create a git tag matching the version
 git tag v0.5.0
@@ -245,6 +245,12 @@ That's it! The workflow automatically:
 - ✅ Builds the package (wheel + source distribution)
 - ✅ Creates a GitHub Release with auto-generated notes
 - ✅ Publishes to PyPI
+
+> **Note:** The commit message has no effect on the release. Only two things matter:
+> 1. The `version` in `pyproject.toml` (e.g., `0.5.0`)
+> 2. The git tag name (e.g., `v0.5.0`)
+> 
+> These must match. The workflow is triggered by the **tag push**, not the commit message.
 
 ### Architecture Overview
 
