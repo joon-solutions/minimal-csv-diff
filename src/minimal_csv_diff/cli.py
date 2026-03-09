@@ -145,7 +145,7 @@ def main_cli():
             print("No key columns provided. Attempting to auto-detect keys.")
             result = quick_csv_diff(args.file1, args.file2, delimiter=args.delimiter, output_file=args.output)
         
-        if result['status'] == 'success':
+        if result['status'] in ['success', 'no_differences']:
             if result['differences_found']:
                 print(f"Differences found and written to '{result['output_file']}'. Summary: {result['summary']}")
             else:
