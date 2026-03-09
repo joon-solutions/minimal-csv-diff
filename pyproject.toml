@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "minimal-csv-diff"
-version = "0.4.1"
+version = "0.4.2"
 description = "Minimal tool to compare CSV files and generate diff reports"
 readme = "README.md"
 authors = [{ name = "luutuankiet", email = "luutuankiet.ftu2@gmail.com" }]
@@ -31,9 +31,3 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
-
-[tool.semantic_release]
-version_toml = "pyproject.toml:project.version"
-branch = "main"                                
-changelog_file = "CHANGELOG.md"                
-build_command = "uv build"

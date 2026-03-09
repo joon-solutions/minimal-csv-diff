@@ -1,54 +1,52 @@
-# .github/workflows/release.yml
-
-name: Create Release and Publish
+# Publish to PyPI when a version tag is pushed
+# Usage: git tag v1.0.0 && git push --tags
+name: Publish to PyPI
 
 on:
   push:
-    branches:
-      - main  # Trigger this workflow on every push to the main branch
+    tags:
+      - 'v*'  # Triggers on v1.0.0, v0.4.2, etc.
 
 jobs:
-  release:
-    name: Create GitHub Release
+  publish:
+    name: Build and Publish
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # To push commits and tags
-      issues: write        # To comment on issues
-      pull-requests: write # To comment on pull requests
-      id-token: write      # To authenticate with PyPI for publishing
-
+      contents: write   # For creating GitHub Release
+      id-token: write   # For PyPI trusted publishing (OIDC)
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # We need to fetch all history and tags for semantic-release to work correctly
-          fetch-depth: 0
-
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install Dependencies
+      
+      - name: Install build tools
+        run: pip install build
+      
+      - name: Verify version matches tag
         run: |
-          python -m pip install --upgrade pip
-          pip install python-semantic-release
-
-      - name: Create Release
-        # This command will:
-        # 1. Determine the new version from commit messages.
-        # 2. Update pyproject.toml with the new version.
-        # 3. Create CHANGELOG.md.
-        # 4. Commit the version bump and changelog.
-        # 5. Create a new git tag.
-        # 6. Create a GitHub Release with the changelog.
-        run: semantic-release publish
-        env:
-          # This token is required for semantic-release to create a GitHub Release
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish package to PyPI
-        # This step runs after the release is created.
-        # It uses the same secure, passwordless method as before.
-        if: success()
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) doesn't match pyproject.toml ($PKG_VERSION)"
+            exit 1
+          fi
+          echo "✓ Versions match!"
+      
+      - name: Build package
+        run: python -m build
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+      
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
