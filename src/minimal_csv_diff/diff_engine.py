@@ -172,7 +172,18 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
         pl.col('failed_columns').list.join('| - |').alias('failed_columns')
     )
     
-    output_df = output_df.sort(by='surrogate_key')
+    # Sort by surrogate_key first, then by source order (file1 before file2)
+    # This groups modified row pairs together: [file1 row, file2 row] for easy side-by-side comparison in spreadsheets
+    # Use a temporary sort key to preserve input order (file1=0, file2=1) rather than alphabetical
+    output_df = output_df.with_columns(
+        pl.when(pl.col('source') == file1_name)
+        .then(pl.lit(0))
+        .otherwise(pl.lit(1))
+        .alias('_source_order')
+    ).sort(
+        by=['surrogate_key', '_source_order'],
+        descending=[False, False]
+    ).drop('_source_order')
 
     output_df.write_csv(output_file, separator=',', quote_style="always")
     
