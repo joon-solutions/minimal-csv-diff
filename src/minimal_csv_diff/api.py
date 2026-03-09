@@ -112,9 +112,11 @@ def compare_csv_files(file1: str, file2: str, key_columns: List[str],
         # Load and normalize dataframes
         df1_raw, df2_raw, df1_normalized_keys, df2_normalized_keys = load_and_normalize_dfs(file1, file2, delimiter, key_columns)
 
-        # Perform the comparison
+        # Perform the comparison using normalized DataFrames
+        # CRITICAL: Must use df1_normalized_keys/df2_normalized_keys, NOT df1_raw/df2_raw
+        # Raw DataFrames have NULL key columns which fail anti-joins (NULL != NULL in Polars)
         differences_found, result_file, summary = diff_csv_core(
-            df1_raw, df2_raw, os.path.basename(file1), os.path.basename(file2), delimiter, key_columns, output_file
+            df1_normalized_keys, df2_normalized_keys, os.path.basename(file1), os.path.basename(file2), delimiter, key_columns, output_file
         )
         
         if differences_found:

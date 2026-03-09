@@ -1,7 +1,7 @@
 import polars as pl
 import os
 from typing import List, Any
-from .csv_processor import normalize_string
+from .csv_processor import normalize_string, normalize_column_expr
 
 def process_unique_row_polars(df_unique: pl.DataFrame, source_file_name: str, key_columns: List[str], final_columns: List[str]) -> pl.DataFrame:
     """
@@ -20,7 +20,7 @@ def process_unique_row_polars(df_unique: pl.DataFrame, source_file_name: str, ke
         return pl.DataFrame()
 
     surrogate_key_expr = pl.concat_str([
-        pl.col(col).map_elements(normalize_string, return_dtype=pl.Utf8)
+        normalize_column_expr(col)
         for col in key_columns if col in df_unique.columns
     ], separator='|')
 
@@ -83,10 +83,13 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
             val2_expr = pl.col(f'{col}_file2')
             
             # Check for differences, considering nulls
+            # Use native Polars expressions for 10-100x speedup over map_elements
+            val1_normalized = normalize_column_expr(col)
+            val2_normalized = normalize_column_expr(f'{col}_file2')
             diff_expr = (
                 (val1_expr.is_null() & val2_expr.is_not_null()) |
                 (val1_expr.is_not_null() & val2_expr.is_null()) |
-                (val1_expr.map_elements(normalize_string, return_dtype=pl.Utf8) != val2_expr.map_elements(normalize_string, return_dtype=pl.Utf8))
+                (val1_normalized != val2_normalized)
             )
             diff_checks.append(
                 pl.when(diff_expr)
@@ -101,7 +104,7 @@ def diff_csv_core(df1: pl.DataFrame, df2: pl.DataFrame, file1_name: str, file2_n
         both_df_diff = both_df.filter(pl.col('failed_columns').list.len() > 0)
 
         if not both_df_diff.is_empty():
-            surrogate_key_expr = pl.concat_str([pl.col(col).map_elements(normalize_string, return_dtype=pl.Utf8) for col in key_columns], separator='|')
+            surrogate_key_expr = pl.concat_str([normalize_column_expr(col) for col in key_columns], separator='|')
 
             # Construct file1_diff_rows and file2_diff_rows as before
             file1_diff_rows = both_df_diff.with_columns([
