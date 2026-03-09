@@ -183,6 +183,119 @@ def test_validate_key_columns():
         for f in files:
             os.unlink(f)
 
+def test_identical_files_produce_zero_diff():
+    """
+    CRITICAL TEST: Comparing identical files must produce zero differences.
+    
+    This catches the bug where NULL key columns caused false positive 'unique rows'
+    because Polars anti-joins treat NULL != NULL.
+    """
+    # Create test data with some NULL/empty key columns (the bug trigger)
+    data = {
+        'project': ['acme-prod', 'acme-prod', 'acme-prod'],
+        'explore_name': ['', '', 'sales_explore'],  # Empty strings -> NULL after processing
+        'view_name': ['user_attrs', 'user_attrs', 'orders'],
+        'field_name': ['city', 'country', 'total'],
+        'model_name': ['', '', 'sales_model'],  # Empty strings -> NULL after processing
+        'field_type': ['dimension', 'dimension', 'measure'],
+        'sql': ['${TABLE}.city', '${TABLE}.country', 'SUM(${TABLE}.amount)'],
+    }
+    
+    df = pl.DataFrame(data)
+    
+    # Write same data to two temp files
+    files = []
+    for _ in range(2):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+            df.write_csv(f.name, include_header=True)
+            files.append(f.name)
+    
+    try:
+        result = compare_csv_files(
+            files[0], files[1], 
+            key_columns=['project', 'explore_name', 'view_name', 'field_name', 'model_name']
+        )
+        
+        # CRITICAL ASSERTIONS
+        assert result['status'] == 'no_differences', f"Expected 'no_differences', got '{result['status']}'"
+        assert result['differences_found'] == False, "Identical files should have no differences"
+        assert result['summary']['total_differences'] == 0, f"Expected 0 differences, got {result['summary']['total_differences']}"
+        assert result['summary']['unique_rows'] == 0, f"Expected 0 unique rows, got {result['summary']['unique_rows']}"
+        
+    finally:
+        for f in files:
+            os.unlink(f)
+
+
+def test_null_key_columns_match_correctly():
+    """
+    Test that rows with NULL/empty key columns still match correctly between files.
+    
+    This specifically tests the normalization pipeline where:
+    1. Empty strings are converted to NULL in load_and_normalize_dfs
+    2. NULL is then converted back to "" by normalize_column_expr for joining
+    """
+    # File 1: Has rows with empty key columns
+    data1 = {
+        'project': ['acme-prod', 'acme-prod'],
+        'explore_name': ['', 'sales'],  # First row has empty explore_name
+        'view_name': ['user_attrs', 'orders'],
+        'field_name': ['city', 'total'],
+        'model_name': ['', 'sales_model'],  # First row has empty model_name
+        'value': ['A', 'B'],
+    }
+    
+    # File 2: Same structure, but 'value' differs for second row
+    data2 = {
+        'project': ['acme-prod', 'acme-prod'],
+        'explore_name': ['', 'sales'],
+        'view_name': ['user_attrs', 'orders'],
+        'field_name': ['city', 'total'],
+        'model_name': ['', 'sales_model'],
+        'value': ['A', 'CHANGED'],  # Only this should show as modified
+    }
+    
+    files = []
+    for data in [data1, data2]:
+        df = pl.DataFrame(data)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+            df.write_csv(f.name, include_header=True)
+            files.append(f.name)
+    
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+            output_file = tmp.name
+        
+        result = compare_csv_files(
+            files[0], files[1],
+            key_columns=['project', 'explore_name', 'view_name', 'field_name', 'model_name'],
+            output_file=output_file
+        )
+        
+        assert result['status'] == 'success', f"Expected 'success', got '{result['status']}'"
+        assert result['differences_found'] == True, "Should find the modified row"
+        
+        # Should only find the MODIFIED row (sales/orders/total), not false positive unique rows
+        assert result['summary']['unique_rows'] == 0, f"Expected 0 unique rows (no false positives), got {result['summary']['unique_rows']}"
+        assert result['summary']['modified_rows'] == 2, f"Expected 2 modified rows (one per file), got {result['summary']['modified_rows']}"
+        
+        # Verify the diff content
+        diff_df = pl.read_csv(output_file)
+        assert len(diff_df) == 2, f"Expected 2 rows in diff (modified row from each file), got {len(diff_df)}"
+        
+        # Both rows should be about the 'sales' explore, not the empty-key row
+        for row in diff_df.iter_rows(named=True):
+            assert row['explore_name'] == 'sales', f"Wrong row in diff: explore_name={row['explore_name']}"
+            assert 'value' in row['failed_columns'], f"Expected 'value' in failed_columns, got {row['failed_columns']}"
+        
+        if os.path.exists(output_file):
+            os.unlink(output_file)
+            
+    finally:
+        for f in files:
+            os.unlink(f)
+
+
 def test_complex_sql_diff_and_unique_rows():
     """
     Tests diff_csv with complex SQL content and verifies both modified and unique rows.
